@@ -1,77 +1,17 @@
-import pygame
+from ursina import *
 import random
-import sys
-import os
 import json
+import os
 from entities import Frog, Platform, Collectible
 
-pygame.init()
+app = Ursina(size=(450, 800), title="Frog Hopper Adventure")
 
-# Constants
-WIDTH, HEIGHT = 600, 800
-FPS = 60
+# Configure Camera
+camera.orthographic = True
+camera.fov = 15
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GREEN = (0, 255, 0)
-
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Frog Hopper")
-clock = pygame.time.Clock()
-
-# Load Assets
-def load_image(name, scale=None):
-    try:
-        img = pygame.image.load(f"assets/{name}").convert_alpha()
-        if scale:
-            img = pygame.transform.scale(img, scale)
-        return img
-    except Exception as e:
-        print(f"Error loading {name}: {e}")
-        surface = pygame.Surface((40, 40))
-        surface.fill((255, 0, 255))
-        return surface
-
-frog_idle_img = load_image('frog_idle.png', (48, 48))
-frog_jump_img = load_image('frog_jump.png', (48, 48))
-frog_red_idle_img = load_image('frog_red_idle.png', (48, 48))
-frog_red_jump_img = load_image('frog_red_jump.png', (48, 48))
-frog_blue_idle_img = load_image('frog_blue_idle.png', (48, 48))
-frog_blue_jump_img = load_image('frog_blue_jump.png', (48, 48))
-
-characters = [
-    {"name": "Green Frog", "idle": frog_idle_img, "jump": frog_jump_img},
-    {"name": "Red Frog", "idle": frog_red_idle_img, "jump": frog_red_jump_img},
-    {"name": "Blue Frog", "idle": frog_blue_idle_img, "jump": frog_blue_jump_img}
-]
-
-lily_pad_img = load_image('lily_pad.png', (80, 32))
-log_img = load_image('log.png', (120, 40))
-fly_img = load_image('fly.png', (32, 32))
-heart_img = load_image('heart.png', (32, 32))
-try:
-    water_bg = pygame.image.load("assets/water_background.png").convert()
-except:
-    water_bg = pygame.Surface((1, 1))
-    water_bg.fill((30, 100, 200))
-
-try:
-    menu_bg = pygame.image.load("assets/menu_bg.png").convert()
-    menu_bg = pygame.transform.scale(menu_bg, (WIDTH, HEIGHT))
-except:
-    menu_bg = pygame.Surface((WIDTH, HEIGHT))
-    menu_bg.fill((50, 150, 200))
-
-try:
-    logo_img = pygame.image.load("assets/logo.png").convert_alpha()
-    logo_img = pygame.transform.scale(logo_img, (400, 200))
-except:
-    logo_img = None
-
-font = pygame.font.SysFont("Arial", 36)
-font_small = pygame.font.SysFont("Arial", 24)
-font_bold = pygame.font.SysFont("Arial", 28, bold=True)
+# Assets mapping
+assets_path = 'assets/'
 
 # Save file setup
 SAVE_FILE = "save.json"
@@ -85,299 +25,241 @@ def save_game(data):
     with open(SAVE_FILE, 'w') as f:
         json.dump(data, f)
 
-def generate_platform(y_pos, level=1):
+save_data = load_save()
+
+# Global Game State
+game_state = "MENU"
+score = 0
+lives = 3
+max_height = 0
+platforms = []
+collectibles = []
+selected_char_idx = 0
+
+characters = [
+    {"name": "Green Frog", "idle": assets_path+"frog_idle.png", "jump": assets_path+"frog_jump.png"},
+    {"name": "Red Frog", "idle": assets_path+"frog_red_idle.png", "jump": assets_path+"frog_red_jump.png"},
+    {"name": "Blue Frog", "idle": assets_path+"frog_blue_idle.png", "jump": assets_path+"frog_blue_jump.png"}
+]
+
+# --- UI Setup ---
+menu_parent = Entity(parent=camera.ui)
+game_ui_parent = Entity(parent=camera.ui, enabled=False)
+char_select_parent = Entity(parent=camera.ui, enabled=False)
+game_over_parent = Entity(parent=camera.ui, enabled=False)
+
+# Background for menu
+menu_bg = Entity(parent=menu_parent, model='quad', texture=assets_path+'menu_bg.png', scale=(2, 1), z=1)
+logo = Entity(parent=menu_parent, model='quad', texture=assets_path+'logo.png', scale=(1, 0.5), y=0.3)
+
+# Menu Buttons
+btn_play = Button(parent=menu_parent, text='PLAY', color=color.green, scale=(0.5, 0.08), y=-0.1)
+btn_char = Button(parent=menu_parent, text='KARAKTER', color=color.azure, scale=(0.5, 0.08), y=-0.2)
+btn_exit = Button(parent=menu_parent, text='EXIT', color=color.red, scale=(0.5, 0.08), y=-0.3)
+
+# Stats Bar
+stats_bg = Button(parent=menu_parent, color=color.dark_gray, scale=(0.6, 0.08), y=0.05, highlight_color=color.dark_gray, pressed_color=color.dark_gray)
+Text(parent=stats_bg, text=f"Coins: {save_data['coins']}", origin=(-1.5, 0), x=-0.4, color=color.gold)
+Text(parent=stats_bg, text=f"BEST: {save_data['best_score']}", origin=(1.5, 0), x=0.4)
+
+# Char Select UI
+Text(parent=char_select_parent, text="SELECT CHARACTER", y=0.3, origin=(0,0), scale=2)
+char_display = Entity(parent=char_select_parent, model='quad', texture=characters[0]['idle'], scale=(0.3, 0.3), y=0)
+char_name_text = Text(parent=char_select_parent, text=characters[0]['name'], y=-0.2, origin=(0,0), scale=1.5)
+btn_prev = Button(parent=char_select_parent, text='Prev', scale=(0.15, 0.1), x=-0.3, y=0)
+btn_next = Button(parent=char_select_parent, text='Next', scale=(0.15, 0.1), x=0.3, y=0)
+btn_back = Button(parent=char_select_parent, text='BACK', color=color.gray, scale=(0.3, 0.08), y=-0.4)
+
+# Game Over UI
+go_title = Text(parent=game_over_parent, text="GAME OVER", color=color.red, y=0.2, origin=(0,0), scale=3)
+go_score = Text(parent=game_over_parent, text="Score: 0", y=0, origin=(0,0), scale=2)
+btn_restart = Button(parent=game_over_parent, text="RESTART", color=color.green, scale=(0.4, 0.08), y=-0.2)
+btn_menu = Button(parent=game_over_parent, text="MAIN MENU", color=color.azure, scale=(0.4, 0.08), y=-0.3)
+
+# HUD
+hud_score = Text(parent=game_ui_parent, text="Score: 0", position=(-0.45, 0.45), scale=2)
+hud_lives = Text(parent=game_ui_parent, text="Lives: 3", position=(0.3, 0.45), scale=2)
+
+# --- Gameplay ---
+frog = None
+bg_entities = []
+
+def generate_platform(y_pos, level):
     ptype = random.choice(['lily', 'log'])
-    img = lily_pad_img if ptype == 'lily' else log_img
-    x = random.randint(0, WIDTH - img.get_width())
-    speed = random.uniform(1.0 + level * 0.2, 3.0 + level * 0.5)
+    tex = assets_path + ('lily_pad.png' if ptype == 'lily' else 'log.png')
+    x_pos = random.uniform(-3, 3)
+    speed = random.uniform(2.0 + level * 0.5, 4.0 + level * 1.0)
     direction = random.choice([-1, 1])
-    return Platform(x, y_pos, img, speed, direction, WIDTH)
+    plat = Platform(tex=tex, speed=speed, direction=direction, x=x_pos, y=y_pos)
+    platforms.append(plat)
+    
+    # 10% chance for collectible
+    if random.random() < 0.1:
+        ctype = 'heart' if random.random() < 0.2 else 'fly'
+        ctex = assets_path + ('heart.png' if ctype == 'heart' else 'fly.png')
+        coll = Collectible(tex=ctex, type_name=ctype, x=plat.x, y=plat.y + 1)
+        collectibles.append(coll)
 
-def draw_rounded_rect(surface, color, rect, radius=15):
-    pygame.draw.rect(surface, color, rect, border_radius=radius)
-
-def draw_button(surface, rect, color, text, font, text_color=(255, 255, 255)):
-    draw_rounded_rect(surface, color, rect)
-    # Bottom shadow effect
-    shadow_rect = pygame.Rect(rect.x, rect.bottom - 5, rect.width, 5)
-    shadow_color = (max(0, color[0]-40), max(0, color[1]-40), max(0, color[2]-40))
-    pygame.draw.rect(surface, shadow_color, shadow_rect, border_bottom_left_radius=15, border_bottom_right_radius=15)
+def start_game():
+    global game_state, frog, score, lives, max_height, platforms, collectibles, bg_entities
     
-    text_surf = font.render(text, True, text_color)
-    text_rect = text_surf.get_rect(center=rect.center)
-    surface.blit(text_surf, text_rect)
-
-def main_menu():
-    selected_idx = 0
-    state = "HOME"
-    save_data = load_save()
+    # Clear old entities
+    if frog: destroy(frog)
+    for p in platforms: destroy(p)
+    for c in collectibles: destroy(c)
+    for b in bg_entities: destroy(b)
+    platforms.clear()
+    collectibles.clear()
+    bg_entities.clear()
     
-    # Define button rects
-    btn_width, btn_height = 400, 60
-    btn_x = WIDTH//2 - btn_width//2
-    play_rect = pygame.Rect(btn_x, 500, btn_width, btn_height)
-    karakter_rect = pygame.Rect(btn_x, 575, btn_width, btn_height)
-    how_to_rect = pygame.Rect(btn_x, 650, btn_width, btn_height)
-    exit_rect = pygame.Rect(btn_x, 725, btn_width, btn_height)
-    back_rect = pygame.Rect(20, 20, 100, 40)
-    
-    while True:
-        screen.blit(menu_bg, (0, 0))
-        mouse_pos = pygame.mouse.get_pos()
-        
-        if state == "HOME":
-            if logo_img:
-                screen.blit(logo_img, (WIDTH//2 - logo_img.get_width()//2, 50))
-            else:
-                title = font_bold.render("FROG HOPPER", True, WHITE)
-                screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
-            
-            # Center frog
-            char = characters[selected_idx]
-            char_img = pygame.transform.scale(char["idle"], (120, 120))
-            screen.blit(char_img, (WIDTH//2 - 60, 280))
-            # Lily pads
-            pad_scaled = pygame.transform.scale(lily_pad_img, (160, 64))
-            screen.blit(pad_scaled, (WIDTH//2 - 80, 360))
-            
-            # Stats bar
-            stats_rect = pygame.Rect(WIDTH//2 - 200, 420, 400, 50)
-            draw_rounded_rect(screen, (20, 40, 80), stats_rect, radius=25)
-            
-            coins_text = font_small.render(f"{save_data['coins']}", True, (255, 215, 0))
-            screen.blit(coins_text, (stats_rect.left + 50, stats_rect.centery - coins_text.get_height()//2))
-            
-            best_text = font_small.render(f"BEST {save_data['best_score']}", True, WHITE)
-            screen.blit(best_text, (stats_rect.right - best_text.get_width() - 20, stats_rect.centery - best_text.get_height()//2))
-            
-            # Buttons
-            draw_button(screen, play_rect, (34, 177, 76), "PLAY", font_bold)
-            draw_button(screen, karakter_rect, (0, 102, 204), "KARAKTER", font_bold)
-            draw_button(screen, how_to_rect, (255, 128, 0), "HOW TO PLAY", font_bold)
-            draw_button(screen, exit_rect, (204, 0, 0), "EXIT", font_bold)
-            
-        elif state == "KARAKTER":
-            title = font_bold.render("SELECT CHARACTER", True, WHITE)
-            screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
-            
-            char = characters[selected_idx]
-            char_img = pygame.transform.scale(char["idle"], (120, 120))
-            screen.blit(char_img, (WIDTH//2 - 60, HEIGHT//2 - 60))
-            
-            char_name = font_bold.render(char["name"], True, WHITE)
-            screen.blit(char_name, (WIDTH//2 - char_name.get_width()//2, HEIGHT//2 + 80))
-            
-            nav_prompt = font_small.render("Use LEFT/RIGHT Arrow Keys", True, (220, 220, 220))
-            screen.blit(nav_prompt, (WIDTH//2 - nav_prompt.get_width()//2, HEIGHT - 150))
-            
-            left_arrow = font_bold.render("<", True, WHITE)
-            right_arrow = font_bold.render(">", True, WHITE)
-            screen.blit(left_arrow, (WIDTH//2 - 120, HEIGHT//2 - 20))
-            screen.blit(right_arrow, (WIDTH//2 + 100, HEIGHT//2 - 20))
-            
-            draw_button(screen, back_rect, (100, 100, 100), "BACK", font_small)
-            
-        elif state == "HOW_TO_PLAY":
-            title = font_bold.render("HOW TO PLAY", True, WHITE)
-            screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
-            
-            instructions = [
-                "Use LEFT / RIGHT arrows to move",
-                "Press SPACE to jump upwards",
-                "Land on platforms to survive",
-                "Collect Flies for +50 points",
-                "Collect Hearts for Extra Lives",
-                "Don't fall off the screen!"
-            ]
-            
-            y_offset = 200
-            for line in instructions:
-                text_surf = font_small.render(line, True, WHITE)
-                screen.blit(text_surf, (WIDTH//2 - text_surf.get_width()//2, y_offset))
-                y_offset += 40
-                
-            draw_button(screen, back_rect, (100, 100, 100), "BACK", font_small)
-
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-                
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # Left click
-                    if state == "HOME":
-                        if play_rect.collidepoint(mouse_pos):
-                            return characters[selected_idx]
-                        elif karakter_rect.collidepoint(mouse_pos):
-                            state = "KARAKTER"
-                        elif how_to_rect.collidepoint(mouse_pos):
-                            state = "HOW_TO_PLAY"
-                        elif exit_rect.collidepoint(mouse_pos):
-                            pygame.quit()
-                            sys.exit()
-                    elif state in ["KARAKTER", "HOW_TO_PLAY"]:
-                        if back_rect.collidepoint(mouse_pos):
-                            state = "HOME"
-                            
-            if event.type == pygame.KEYDOWN:
-                if state == "KARAKTER":
-                    if event.key == pygame.K_LEFT:
-                        selected_idx = (selected_idx - 1) % len(characters)
-                    elif event.key == pygame.K_RIGHT:
-                        selected_idx = (selected_idx + 1) % len(characters)
-                    elif event.key == pygame.K_SPACE or event.key == pygame.K_ESCAPE:
-                        state = "HOME"
-                elif state == "HOME" and event.key == pygame.K_SPACE:
-                    return characters[selected_idx]
-
-def game_loop(char):
-    platforms = []
-    collectibles = []
-    
-    start_y = HEIGHT - 50
-    for i in range(10):
-        platforms.append(generate_platform(start_y - i * 120, 1))
-    
-    safe_plat = Platform(WIDTH//2 - 40, HEIGHT - 50, lily_pad_img, 0, 1, WIDTH)
-    platforms[0] = safe_plat
-    
-    frog = Frog(WIDTH//2, HEIGHT - 50, char["idle"], char["jump"])
-    frog.on_platform = safe_plat
-    
+    # Reset states
     score = 0
     lives = 3
-    level = 1
     max_height = 0
-    scroll_threshold = HEIGHT // 2
-
-    bg_y = 0
-
-    running = True
-    while running:
-        clock.tick(FPS)
-        keys = pygame.key.get_pressed()
+    camera.y = 0
+    
+    # Setup Backgrounds
+    for i in range(3):
+        bg = Entity(model='quad', texture=assets_path+'water_background.png', scale=(15, 15), z=2, y=i*15)
+        bg_entities.append(bg)
         
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-
-        frog.update(keys, WIDTH, HEIGHT, platforms)
+    # Initial platforms
+    safe_plat = Platform(tex=assets_path+'lily_pad.png', speed=0, direction=1, x=0, y=-5)
+    platforms.append(safe_plat)
+    
+    for i in range(1, 10):
+        generate_platform(safe_plat.y + i * 3, 1)
         
-        for plat in platforms:
-            plat.update()
-            
-        scroll_y = 0
-        if frog.rect.top < scroll_threshold:
-            scroll_y = scroll_threshold - frog.rect.top
-            frog.rect.top = scroll_threshold
-            
-            max_height += scroll_y
-            score = max_height // 10
-            level = 1 + (max_height // 1000)
+    # Setup Frog
+    char = characters[selected_char_idx]
+    frog = Frog(idle_tex=char['idle'], jump_tex=char['jump'], x=0, y=-4)
+    frog.on_platform = safe_plat
+    
+    menu_parent.enabled = False
+    game_over_parent.enabled = False
+    game_ui_parent.enabled = True
+    game_state = "PLAYING"
+    update_hud()
 
-        for plat in platforms:
-            plat.rect.y += scroll_y
+def game_over():
+    global game_state
+    game_state = "GAME_OVER"
+    game_ui_parent.enabled = False
+    game_over_parent.enabled = True
+    go_score.text = f"Final Score: {score}"
+    
+    if score > save_data.get("best_score", 0):
+        save_data["best_score"] = score
+        save_game(save_data)
+
+def update_hud():
+    hud_score.text = f"Score: {score}"
+    hud_lives.text = f"Lives: {lives}"
+
+# Button Callbacks
+def on_play(): start_game()
+btn_play.on_click = on_play
+
+def on_char():
+    menu_parent.enabled = False
+    char_select_parent.enabled = True
+btn_char.on_click = on_char
+
+def on_exit(): application.quit()
+btn_exit.on_click = on_exit
+
+def on_back():
+    char_select_parent.enabled = False
+    menu_parent.enabled = True
+btn_back.on_click = on_back
+
+def on_prev():
+    global selected_char_idx
+    selected_char_idx = (selected_char_idx - 1) % len(characters)
+    update_char_display()
+btn_prev.on_click = on_prev
+
+def on_next():
+    global selected_char_idx
+    selected_char_idx = (selected_char_idx + 1) % len(characters)
+    update_char_display()
+btn_next.on_click = on_next
+
+def update_char_display():
+    char = characters[selected_char_idx]
+    char_display.texture = char['idle']
+    char_name_text.text = char['name']
+
+def on_restart(): start_game()
+btn_restart.on_click = on_restart
+
+def on_menu():
+    game_over_parent.enabled = False
+    menu_parent.enabled = True
+    game_state = "MENU"
+    camera.y = 0
+btn_menu.on_click = on_menu
+
+# Main Update Loop
+def update():
+    global score, lives, max_height
+    
+    if game_state == "PLAYING" and frog:
+        # Camera logic
+        if frog.y > camera.y:
+            camera.y = frog.y
             
+            # Score logic
+            if camera.y > max_height:
+                max_height = camera.y
+                score = int(max_height * 10)
+                update_hud()
+                
+        # Background logic (infinite scroll)
+        for bg in bg_entities:
+            if camera.y - bg.y > 15:
+                bg.y += 15 * len(bg_entities)
+                
+        # Platform generation
+        highest_plat = max(platforms, key=lambda p: p.y)
+        if highest_plat.y < camera.y + 10:
+            level = 1 + int(max_height / 30)
+            generate_platform(highest_plat.y + random.uniform(2.5, 4.0), level)
+            
+        # Collectible collisions
+        to_remove = []
         for coll in collectibles:
-            coll.update(scroll_y)
-
-        platforms = [p for p in platforms if p.rect.top < HEIGHT]
-        while len(platforms) < 10:
-            highest_y = min(p.rect.y for p in platforms)
-            new_y = highest_y - random.randint(100, 140)
-            platforms.append(generate_platform(new_y, level))
-            
-            if random.random() < 0.1:
-                ctype = 'heart' if random.random() < 0.2 else 'fly'
-                img = heart_img if ctype == 'heart' else fly_img
-                cx, cy = platforms[-1].rect.centerx, platforms[-1].rect.top - 20
-                collectibles.append(Collectible(cx, cy, img, ctype))
-
-        to_remove_coll = []
-        for coll in collectibles:
-            if frog.rect.colliderect(coll.rect):
+            # Sync position with platform if it's on top of one
+            # Not strictly necessary if it floats, but let's just leave it static or move it down
+            if frog.intersects(coll).hit:
                 if coll.type_name == 'fly':
-                    score += 50
+                    score += 500
                 elif coll.type_name == 'heart':
                     lives += 1
-                to_remove_coll.append(coll)
-            elif coll.rect.top > HEIGHT:
-                to_remove_coll.append(coll)
-        
-        for c in to_remove_coll:
+                update_hud()
+                to_remove.append(coll)
+                
+        for c in to_remove:
             if c in collectibles:
                 collectibles.remove(c)
-
-        if frog.rect.top > HEIGHT:
+                destroy(c)
+                
+        # Death check
+        if frog.y < camera.y - 8:
             lives -= 1
+            update_hud()
             if lives > 0:
-                safe = min(platforms, key=lambda p: abs(p.rect.y - (HEIGHT - 150)))
-                frog.rect.midbottom = (safe.rect.centerx, safe.rect.top)
-                frog.vel_y = 0
-                frog.on_platform = safe
+                # Respawn on lowest visible platform
+                safe = min([p for p in platforms if p.y > camera.y - 5], key=lambda p: p.y, default=None)
+                if safe:
+                    frog.y = safe.y + 1
+                    frog.x = safe.x
+                    frog.vel_y = 0
+                    frog.is_jumping = False
+                    frog.on_platform = safe
+                else:
+                    game_over()
             else:
-                running = False
+                game_over()
 
-        if water_bg.get_width() > 1:
-            bg_y = (bg_y + scroll_y * 0.5) % water_bg.get_height()
-            for x in range(0, WIDTH, water_bg.get_width()):
-                for y in range(-water_bg.get_height(), HEIGHT, water_bg.get_height()):
-                    screen.blit(water_bg, (x, y + bg_y))
-        else:
-            screen.fill((30, 100, 200))
-
-        for plat in platforms:
-            plat.draw(screen)
-            
-        for coll in collectibles:
-            coll.draw(screen)
-            
-        frog.draw(screen)
-        
-        score_text = font.render(f"Score: {score}", True, WHITE)
-        lives_text = font.render(f"Lives: {lives}", True, WHITE)
-        screen.blit(score_text, (10, 10))
-        screen.blit(lives_text, (WIDTH - lives_text.get_width() - 10, 10))
-        
-        pygame.display.flip()
-
-    return score
-
-def game_over_screen(score):
-    while True:
-        screen.fill(BLACK)
-        go_text = font.render("GAME OVER", True, (255, 0, 0))
-        score_text = font.render(f"Final Score: {score}", True, WHITE)
-        prompt = font.render("Press SPACE to Restart, ESC to Quit", True, WHITE)
-        
-        screen.blit(go_text, (WIDTH//2 - go_text.get_width()//2, HEIGHT//3))
-        screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2))
-        screen.blit(prompt, (WIDTH//2 - prompt.get_width()//2, HEIGHT//2 + 50))
-        
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    return
-                if event.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
-
-if __name__ == "__main__":
-    while True:
-        selected_char = main_menu()
-        final_score = game_loop(selected_char)
-        
-        save_data = load_save()
-        if final_score > save_data.get("best_score", 0):
-            save_data["best_score"] = final_score
-        save_game(save_data)
-        
-        game_over_screen(final_score)
+app.run()

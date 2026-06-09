@@ -1,103 +1,98 @@
-import pygame
+from ursina import *
+import random
 
-class Frog:
-    def __init__(self, x, y, idle_img, jump_img):
-        self.idle_img = idle_img
-        self.jump_img = jump_img
-        self.image = self.idle_img
-        self.rect = self.image.get_rect()
-        self.rect.midbottom = (x, y)
+class Frog(Entity):
+    def __init__(self, idle_tex, jump_tex, **kwargs):
+        super().__init__(
+            model='quad',
+            texture=idle_tex,
+            scale=(1.5, 1.5),
+            collider='box',
+            **kwargs
+        )
+        self.idle_tex = idle_tex
+        self.jump_tex = jump_tex
+        
         self.vel_x = 0
         self.vel_y = 0
-        self.speed = 5
-        self.jump_power = -13
-        self.gravity = 0.5
+        self.speed = 8
+        self.jump_power = 18
+        self.gravity = -40
         self.is_jumping = False
         self.on_platform = None
+        
+        # Adjust collider to be slightly smaller than the visual
+        self.collider = BoxCollider(self, center=Vec3(0, -0.2, 0), size=Vec3(0.6, 0.4, 0))
 
-    def update(self, keys, width, height, platforms):
+    def update(self):
         # Horizontal movement
-        if keys[pygame.K_LEFT]:
-            self.vel_x = -self.speed
-        elif keys[pygame.K_RIGHT]:
-            self.vel_x = self.speed
-        else:
-            self.vel_x = 0
+        self.vel_x = (held_keys['right arrow'] - held_keys['left arrow']) * self.speed
+        self.x += self.vel_x * time.dt
+        
+        # Screen bounds (approximate based on aspect ratio)
+        if self.x < -4.5: self.x = -4.5
+        if self.x > 4.5: self.x = 4.5
 
-        self.rect.x += self.vel_x
-
-        # Keep frog within screen bounds horizontally
-        if self.rect.left < 0:
-            self.rect.left = 0
-        if self.rect.right > width:
-            self.rect.right = width
-
+        # Apply gravity
+        self.vel_y += self.gravity * time.dt
+        self.y += self.vel_y * time.dt
+        
         # Jumping
-        if keys[pygame.K_SPACE] and not self.is_jumping and self.on_platform:
+        if held_keys['space'] and not self.is_jumping and self.on_platform:
             self.vel_y = self.jump_power
             self.is_jumping = True
             self.on_platform = None
-            self.image = self.jump_img
+            self.texture = self.jump_tex
 
-        # Apply gravity
-        self.vel_y += self.gravity
-        self.rect.y += self.vel_y
-
-        # If we start falling down, we might land on a platform
-        if self.vel_y >= 0:
-            self.image = self.idle_img # fall or idle
-            # Check collision with platforms only when falling
-            for plat in platforms:
-                if self.rect.colliderect(plat.rect) and self.rect.bottom <= plat.rect.centery + self.vel_y:
-                    self.rect.bottom = plat.rect.top
+        # Platform Collision (only when falling)
+        if self.vel_y < 0:
+            self.texture = self.idle_tex
+            hit_info = self.intersects()
+            if hit_info.hit:
+                hit_entity = hit_info.entity
+                if isinstance(hit_entity, Platform) and self.y > hit_entity.y:
+                    # Snap to top of platform
+                    self.y = hit_entity.y + 0.8 # offset based on scale
                     self.vel_y = 0
                     self.is_jumping = False
-                    self.on_platform = plat
-                    break
+                    self.on_platform = hit_entity
+
         else:
             self.on_platform = None
 
-        # Move with platform if standing on it
+        # Move with platform
         if self.on_platform:
-            self.rect.x += self.on_platform.speed * self.on_platform.direction
-            # Still keep in bounds
-            if self.rect.left < 0:
-                self.rect.left = 0
-            if self.rect.right > width:
-                self.rect.right = width
+            self.x += self.on_platform.speed * self.on_platform.direction * time.dt
+            if self.x < -4.5: self.x = -4.5
+            if self.x > 4.5: self.x = 4.5
 
-    def draw(self, surface):
-        surface.blit(self.image, self.rect)
-
-class Platform:
-    def __init__(self, x, y, image, speed, direction, width):
-        self.image = image
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
+class Platform(Entity):
+    def __init__(self, tex, speed, direction, **kwargs):
+        super().__init__(
+            model='quad',
+            texture=tex,
+            scale=(3, 1),
+            collider='box',
+            **kwargs
+        )
         self.speed = speed
-        self.direction = direction # 1 for right, -1 for left
-        self.screen_width = width
+        self.direction = direction
 
     def update(self):
-        self.rect.x += self.speed * self.direction
+        self.x += self.speed * self.direction * time.dt
         # Wrap around
-        if self.direction == 1 and self.rect.left > self.screen_width:
-            self.rect.right = 0
-        elif self.direction == -1 and self.rect.right < 0:
-            self.rect.left = self.screen_width
+        if self.direction == 1 and self.x > 6:
+            self.x = -6
+        elif self.direction == -1 and self.x < -6:
+            self.x = 6
 
-    def draw(self, surface):
-        surface.blit(self.image, self.rect)
-
-class Collectible:
-    def __init__(self, x, y, image, type_name):
-        self.image = image
-        self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
-        self.type_name = type_name # 'fly' or 'heart'
-
-    def update(self, scroll_y):
-        self.rect.y += scroll_y
-
-    def draw(self, surface):
-        surface.blit(self.image, self.rect)
+class Collectible(Entity):
+    def __init__(self, tex, type_name, **kwargs):
+        super().__init__(
+            model='quad',
+            texture=tex,
+            scale=(1, 1),
+            collider='box',
+            **kwargs
+        )
+        self.type_name = type_name
