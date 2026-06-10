@@ -4,7 +4,7 @@ import json
 import os
 from entities import Frog, Platform, Collectible
 
-app = Ursina(size=(450, 800), title="Frog Hopper Adventure")
+app = Ursina(size=(540, 960), title="Frog Hopper Adventure")
 
 # Configure Camera
 camera.orthographic = True
@@ -12,6 +12,8 @@ camera.fov = 15
 
 # Assets mapping
 assets_path = 'assets/'
+
+CUTE_FONT = '/c/Windows/Fonts/comicbd.ttf' if os.path.exists('C:/Windows/Fonts/comicbd.ttf') else 'default'
 
 # Save file setup
 SAVE_FILE = "save.json"
@@ -42,43 +44,162 @@ characters = [
     {"name": "Blue Frog", "idle": assets_path+"frog_blue_idle.png", "jump": assets_path+"frog_blue_jump.png"}
 ]
 
+def create_button_3d(parent, text, color_top, color_bottom, scale=(0.38, 0.07), y=0):
+    btn = Button(
+        parent=parent,
+        text=f"<b>{text}</b>",
+        color=color_top,
+        highlight_color=color.tint(color_top, 0.1),
+        pressed_color=color.tint(color_top, -0.1),
+        scale=scale,
+        y=y
+    )
+    btn.text_color = color.white
+    if CUTE_FONT != 'default':
+        btn.text_entity.font = CUTE_FONT
+    btn.text_entity.shadow = True
+    btn.text_entity.scale *= 1.45  # Make text larger and thicker
+    
+    # 3D Base Shadow
+    btn.base = Entity(
+        parent=btn,
+        model='quad',
+        texture='button_tint',
+        color=color_bottom,
+        scale=(1.0, 1.0),
+        y=-0.12,  # Relative offset downwards
+        z=0.01   # Behind the button
+    )
+    return btn
+
 # --- UI Setup ---
 menu_parent = Entity(parent=camera.ui)
 game_ui_parent = Entity(parent=camera.ui, enabled=False)
 char_select_parent = Entity(parent=camera.ui, enabled=False)
 game_over_parent = Entity(parent=camera.ui, enabled=False)
+help_parent = Entity(parent=camera.ui, enabled=False)
 
 # Background for menu
-menu_bg = Entity(parent=menu_parent, model='quad', texture=assets_path+'menu_bg.png', scale=(2, 1), z=1)
-logo = Entity(parent=menu_parent, model='quad', texture=assets_path+'logo.png', scale=(1, 0.5), y=0.3)
+menu_bg = Entity(parent=menu_parent, model='quad', texture=assets_path+'bg_menu.png', scale=(2, 2), z=1)
+logo = Entity(parent=menu_parent, model='quad', texture=assets_path+'logo.png', scale=(0.32, 0.32), y=0.30)
 
 # Menu Buttons
-btn_play = Button(parent=menu_parent, text='PLAY', color=color.green, scale=(0.5, 0.08), y=-0.1)
-btn_char = Button(parent=menu_parent, text='KARAKTER', color=color.azure, scale=(0.5, 0.08), y=-0.2)
-btn_exit = Button(parent=menu_parent, text='EXIT', color=color.red, scale=(0.5, 0.08), y=-0.3)
+btn_play = create_button_3d(
+    parent=menu_parent, 
+    text='MULAI', 
+    color_top=color.Color(0.26, 0.84, 0.48, 1.0), 
+    color_bottom=color.Color(0.17, 0.65, 0.35, 1.0), 
+    scale=(0.38, 0.07), 
+    y=-0.02
+)
+btn_char = create_button_3d(
+    parent=menu_parent, 
+    text='KARAKTER', 
+    color_top=color.Color(0.24, 0.65, 1.0, 1.0), 
+    color_bottom=color.Color(0.11, 0.46, 0.80, 1.0), 
+    scale=(0.38, 0.07), 
+    y=-0.10
+)
+btn_help = create_button_3d(
+    parent=menu_parent, 
+    text='CARA BERMAIN', 
+    color_top=color.Color(1.0, 0.67, 0.17, 1.0), 
+    color_bottom=color.Color(0.80, 0.48, 0.08, 1.0), 
+    scale=(0.38, 0.07), 
+    y=-0.18
+)
+btn_exit = create_button_3d(
+    parent=menu_parent, 
+    text='KELUAR', 
+    color_top=color.Color(1.0, 0.32, 0.32, 1.0), 
+    color_bottom=color.Color(0.80, 0.20, 0.20, 1.0), 
+    scale=(0.38, 0.07), 
+    y=-0.26
+)
 
-# Stats Bar
-stats_bg = Button(parent=menu_parent, color=color.dark_gray, scale=(0.6, 0.08), y=0.05, highlight_color=color.dark_gray, pressed_color=color.dark_gray)
-Text(parent=stats_bg, text=f"Coins: {save_data['coins']}", origin=(-1.5, 0), x=-0.4, color=color.gold)
-Text(parent=stats_bg, text=f"BEST: {save_data['best_score']}", origin=(1.5, 0), x=0.4)
+# Stats Bar (Glassmorphic Transparent Design)
+stats_bg = Button(
+    parent=menu_parent, 
+    color=color.Color(0, 0, 0, 0.3), 
+    highlight_color=color.Color(0, 0, 0, 0.3), 
+    pressed_color=color.Color(0, 0, 0, 0.3), 
+    scale=(0.48, 0.06), 
+    y=0.08
+)
+t_coins = Text(parent=stats_bg, text=f"<b>Coins: {save_data['coins']}</b>", origin=(-1.2, 0), x=-0.32, color=color.gold, scale=1.1, shadow=True)
+t_best = Text(parent=stats_bg, text=f"<b>Best: {save_data['best_score']}</b>", origin=(1.2, 0), x=0.32, color=color.white, scale=1.1, shadow=True)
+if CUTE_FONT != 'default':
+    t_coins.font = CUTE_FONT
+    t_best.font = CUTE_FONT
 
 # Char Select UI
-Text(parent=char_select_parent, text="SELECT CHARACTER", y=0.3, origin=(0,0), scale=2)
+t_select = Text(parent=char_select_parent, text="<b>SELECT CHARACTER</b>", y=0.3, origin=(0,0), scale=2, shadow=True)
 char_display = Entity(parent=char_select_parent, model='quad', texture=characters[0]['idle'], scale=(0.3, 0.3), y=0)
-char_name_text = Text(parent=char_select_parent, text=characters[0]['name'], y=-0.2, origin=(0,0), scale=1.5)
-btn_prev = Button(parent=char_select_parent, text='Prev', scale=(0.15, 0.1), x=-0.3, y=0)
-btn_next = Button(parent=char_select_parent, text='Next', scale=(0.15, 0.1), x=0.3, y=0)
-btn_back = Button(parent=char_select_parent, text='BACK', color=color.gray, scale=(0.3, 0.08), y=-0.4)
+char_name_text = Text(parent=char_select_parent, text=f"<b>{characters[0]['name']}</b>", y=-0.2, origin=(0,0), scale=1.5, shadow=True)
+if CUTE_FONT != 'default':
+    t_select.font = CUTE_FONT
+    char_name_text.font = CUTE_FONT
+
+btn_prev = create_button_3d(parent=char_select_parent, text='PREV', color_top=color.Color(0.70, 0.75, 0.76, 1.0), color_bottom=color.Color(0.39, 0.43, 0.45, 1.0), scale=(0.15, 0.08), y=0)
+btn_prev.x = -0.3
+btn_next = create_button_3d(parent=char_select_parent, text='NEXT', color_top=color.Color(0.70, 0.75, 0.76, 1.0), color_bottom=color.Color(0.39, 0.43, 0.45, 1.0), scale=(0.15, 0.08), y=0)
+btn_next.x = 0.3
+
+btn_back = create_button_3d(
+    parent=char_select_parent, 
+    text='KEMBALI', 
+    color_top=color.Color(0.70, 0.75, 0.76, 1.0), 
+    color_bottom=color.Color(0.39, 0.43, 0.45, 1.0), 
+    scale=(0.3, 0.08), 
+    y=-0.4
+)
+
+# Help UI
+t_help_title = Text(parent=help_parent, text="<b>CARA BERMAIN</b>", y=0.3, origin=(0,0), scale=2, color=color.orange, shadow=True)
+t_help_info = Text(parent=help_parent, text="<b>Ketuk layar atau klik untuk melompat!\nHindari jatuh ke bawah.\nKumpulkan lalat dan hati untuk skor & nyawa.</b>", y=0, origin=(0,0), scale=1.1, shadow=True)
+if CUTE_FONT != 'default':
+    t_help_title.font = CUTE_FONT
+    t_help_info.font = CUTE_FONT
+
+btn_help_back = create_button_3d(
+    parent=help_parent, 
+    text='KEMBALI', 
+    color_top=color.Color(0.70, 0.75, 0.76, 1.0), 
+    color_bottom=color.Color(0.39, 0.43, 0.45, 1.0), 
+    scale=(0.3, 0.08), 
+    y=-0.3
+)
 
 # Game Over UI
-go_title = Text(parent=game_over_parent, text="GAME OVER", color=color.red, y=0.2, origin=(0,0), scale=3)
-go_score = Text(parent=game_over_parent, text="Score: 0", y=0, origin=(0,0), scale=2)
-btn_restart = Button(parent=game_over_parent, text="RESTART", color=color.green, scale=(0.4, 0.08), y=-0.2)
-btn_menu = Button(parent=game_over_parent, text="MAIN MENU", color=color.azure, scale=(0.4, 0.08), y=-0.3)
+go_title = Text(parent=game_over_parent, text="<b>GAME OVER</b>", color=color.red, y=0.2, origin=(0,0), scale=3, shadow=True)
+go_score = Text(parent=game_over_parent, text="<b>Score: 0</b>", y=0, origin=(0,0), scale=2, shadow=True)
+if CUTE_FONT != 'default':
+    go_title.font = CUTE_FONT
+    go_score.font = CUTE_FONT
+
+btn_restart = create_button_3d(
+    parent=game_over_parent, 
+    text="RESTART", 
+    color_top=color.Color(0.26, 0.84, 0.48, 1.0), 
+    color_bottom=color.Color(0.17, 0.65, 0.35, 1.0), 
+    scale=(0.4, 0.08), 
+    y=-0.2
+)
+btn_menu = create_button_3d(
+    parent=game_over_parent, 
+    text="MAIN MENU", 
+    color_top=color.Color(0.24, 0.65, 1.0, 1.0), 
+    color_bottom=color.Color(0.11, 0.46, 0.80, 1.0), 
+    scale=(0.4, 0.08), 
+    y=-0.3
+)
 
 # HUD
-hud_score = Text(parent=game_ui_parent, text="Score: 0", position=(-0.45, 0.45), scale=2)
-hud_lives = Text(parent=game_ui_parent, text="Lives: 3", position=(0.3, 0.45), scale=2)
+hud_score = Text(parent=game_ui_parent, text="<b>Score: 0</b>", position=(-0.45, 0.45), scale=2, shadow=True)
+hud_lives = Text(parent=game_ui_parent, text="<b>Lives: 3</b>", position=(0.3, 0.45), scale=2, shadow=True)
+if CUTE_FONT != 'default':
+    hud_score.font = CUTE_FONT
+    hud_lives.font = CUTE_FONT
 
 # --- Gameplay ---
 frog = None
@@ -146,15 +267,15 @@ def game_over():
     game_state = "GAME_OVER"
     game_ui_parent.enabled = False
     game_over_parent.enabled = True
-    go_score.text = f"Final Score: {score}"
+    go_score.text = f"<b>Final Score: {score}</b>"
     
     if score > save_data.get("best_score", 0):
         save_data["best_score"] = score
         save_game(save_data)
 
 def update_hud():
-    hud_score.text = f"Score: {score}"
-    hud_lives.text = f"Lives: {lives}"
+    hud_score.text = f"<b>Score: {score}</b>"
+    hud_lives.text = f"<b>Lives: {lives}</b>"
 
 # Button Callbacks
 def on_play(): start_game()
@@ -165,6 +286,11 @@ def on_char():
     char_select_parent.enabled = True
 btn_char.on_click = on_char
 
+def on_help():
+    menu_parent.enabled = False
+    help_parent.enabled = True
+btn_help.on_click = on_help
+
 def on_exit(): application.quit()
 btn_exit.on_click = on_exit
 
@@ -172,6 +298,11 @@ def on_back():
     char_select_parent.enabled = False
     menu_parent.enabled = True
 btn_back.on_click = on_back
+
+def on_help_back():
+    help_parent.enabled = False
+    menu_parent.enabled = True
+btn_help_back.on_click = on_help_back
 
 def on_prev():
     global selected_char_idx
@@ -188,7 +319,7 @@ btn_next.on_click = on_next
 def update_char_display():
     char = characters[selected_char_idx]
     char_display.texture = char['idle']
-    char_name_text.text = char['name']
+    char_name_text.text = f"<b>{char['name']}</b>"
 
 def on_restart(): start_game()
 btn_restart.on_click = on_restart
