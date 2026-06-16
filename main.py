@@ -132,19 +132,29 @@ btn_exit = create_button_3d(
 )
 
 # Stats Bar (Glassmorphic Transparent Design)
-stats_bg = Button(
-    parent=menu_parent, 
-    color=color.Color(0, 0, 0, 0.3), 
-    highlight_color=color.Color(0, 0, 0, 0.3), 
-    pressed_color=color.Color(0, 0, 0, 0.3), 
-    scale=(0.48, 0.06), 
-    y=0.08
+stats_bg = Entity(
+    parent=menu_parent,
+    model='quad',
+    color=color.Color(0, 0, 0, 0.35),
+    scale=(0.44, 0.070),
+    y=0.08,
+    z=0.01
 )
-t_coins = Text(parent=stats_bg, text=f"<b>Coins: {save_data['coins']}</b>", origin=(-1.2, 0), x=-0.32, color=color.gold, scale=1.1, shadow=True)
-t_best = Text(parent=stats_bg, text=f"<b>Best: {save_data['best_score']}</b>", origin=(1.2, 0), x=0.32, color=color.white, scale=1.1, shadow=True)
+# Satu teks terpusat agar otomatis pas di tengah stats bar
+def get_stats_text():
+    return f"<b>Coins: {save_data['coins']}   |   Best: {save_data['best_score']}</b>"
+
+t_stats = Text(
+    parent=menu_parent,
+    text=get_stats_text(),
+    x=0, y=0.08,
+    origin=(0, 0),
+    color=color.gold,
+    scale=1.2,
+    shadow=True
+)
 if CUTE_FONT != 'default':
-    t_coins.font = CUTE_FONT
-    t_best.font = CUTE_FONT
+    t_stats.font = CUTE_FONT
 
 # Char Select UI
 t_select = Text(parent=char_select_parent, text="<b>SELECT CHARACTER</b>", y=0.3, origin=(0,0), scale=2, shadow=True)
@@ -343,6 +353,7 @@ def on_menu():
     menu_parent.enabled = True
     game_state = "MENU"
     camera.y = 0
+    t_stats.text = get_stats_text()  # Refresh stats (best score mungkin sudah berubah)
 btn_menu.on_click = on_menu
 
 # Main Update Loop
