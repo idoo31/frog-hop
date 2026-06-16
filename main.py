@@ -13,12 +13,19 @@ camera.fov = 15
 # Assets mapping
 assets_path = 'assets/'
 
-_font_bundled = os.path.join(os.path.dirname(__file__), 'assets', 'fonts', 'comicbd.ttf')
+def _to_unix_path(p):
+    """Konversi Windows path ke Unix-style yang diterima Panda3D/Ursina."""
+    p = p.replace('\\', '/')
+    if len(p) >= 2 and p[1] == ':':          # misal "C:/..." → "/c/..."
+        p = '/' + p[0].lower() + p[2:]
+    return p
+
+_font_bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'fonts', 'comicbd.ttf')
 _font_system  = 'C:/Windows/Fonts/comicbd.ttf'
 if os.path.exists(_font_bundled):
-    CUTE_FONT = _font_bundled          # font dari assets/ (portable)
+    CUTE_FONT = _to_unix_path(_font_bundled)   # font dari assets/ (portable)
 elif os.path.exists(_font_system):
-    CUTE_FONT = _font_system           # fallback: font sistem Windows
+    CUTE_FONT = _to_unix_path(_font_system)    # fallback: font sistem Windows
 else:
     CUTE_FONT = 'default'
 
