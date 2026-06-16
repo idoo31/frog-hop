@@ -13,7 +13,14 @@ camera.fov = 15
 # Assets mapping
 assets_path = 'assets/'
 
-CUTE_FONT = '/c/Windows/Fonts/comicbd.ttf' if os.path.exists('C:/Windows/Fonts/comicbd.ttf') else 'default'
+_font_bundled = os.path.join(os.path.dirname(__file__), 'assets', 'fonts', 'comicbd.ttf')
+_font_system  = 'C:/Windows/Fonts/comicbd.ttf'
+if os.path.exists(_font_bundled):
+    CUTE_FONT = _font_bundled          # font dari assets/ (portable)
+elif os.path.exists(_font_system):
+    CUTE_FONT = _font_system           # fallback: font sistem Windows
+else:
+    CUTE_FONT = 'default'
 
 # Save file setup
 SAVE_FILE = "save.json"
